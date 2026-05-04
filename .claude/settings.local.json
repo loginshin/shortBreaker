@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cd C:\\\\workspace\\\\GitHub\\\\ShortBreaker; .\\\\gradlew.bat :app:assembleDebug --no-daemon 2>&1 | Where-Object { $_ -match \"BUILD|warning|error|FAILED|Task :app:compile\" })"
+    ]
+  }
+}
