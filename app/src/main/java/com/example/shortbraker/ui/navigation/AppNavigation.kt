@@ -9,6 +9,7 @@ import com.example.shortbraker.ui.screen.DashboardScreen
 import com.example.shortbraker.ui.screen.HistoryScreen
 import com.example.shortbraker.ui.screen.PermissionScreen
 import com.example.shortbraker.ui.screen.SettingsScreen
+import com.example.shortbraker.viewmodel.DashboardViewModel
 import com.example.shortbraker.viewmodel.SettingsViewModel
 
 object Routes {
@@ -22,6 +23,7 @@ object Routes {
 fun AppNavigation() {
     val navController = rememberNavController()
     val settingsViewModel: SettingsViewModel = viewModel()
+    val dashboardViewModel: DashboardViewModel = viewModel()
 
     NavHost(
         navController = navController,
@@ -30,7 +32,8 @@ fun AppNavigation() {
         composable(Routes.DASHBOARD) {
             DashboardScreen(
                 navController = navController,
-                settingsViewModel = settingsViewModel
+                settingsViewModel = settingsViewModel,
+                dashboardViewModel = dashboardViewModel
             )
         }
         composable(Routes.SETTINGS) {
@@ -43,7 +46,10 @@ fun AppNavigation() {
             HistoryScreen(navController = navController)
         }
         composable(Routes.PERMISSION) {
-            PermissionScreen(navController = navController)
+            PermissionScreen(
+                navController = navController,
+                dashboardViewModel = dashboardViewModel
+            )
         }
     }
 }
