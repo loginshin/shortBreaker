@@ -1,17 +1,18 @@
 package com.example.shortbraker.accessibility
 
 import android.accessibilityservice.AccessibilityService
+import android.app.ActivityManager
 import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
 import com.example.shortbraker.data.ShortsDebugRepository
 import com.example.shortbraker.data.ShortsDebugState
 import com.example.shortbraker.data.ShortsUsageRepository
 import com.example.shortbraker.data.UserSettingsRepository
-import com.example.shortbraker.overlay.OverlayManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class ShortsAccessibilityService : AccessibilityService() {
@@ -20,7 +21,6 @@ class ShortsAccessibilityService : AccessibilityService() {
     private lateinit var usageRepository: ShortsUsageRepository
     private lateinit var debugRepository: ShortsDebugRepository
     private lateinit var settingsRepository: UserSettingsRepository
-    private lateinit var overlayManager: OverlayManager
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private var isShortsActive = false
@@ -28,25 +28,26 @@ class ShortsAccessibilityService : AccessibilityService() {
     private var consecutiveScrollCount = 0
     private var lastAnalysisMs = 0L
     private var lastDebugWriteMs = 0L
+    private var isKilling = false
 
-    // 두 Flow에서 수집한 값을 메인 스레드 비교용으로 캐싱
-    @Volatile private var dailyLimitMinutes = 0
+    @Volatile private var dailyLimitMinutes = 30
     @Volatile private var todayShortsSeconds = 0L
     @Volatile private var blockMode = "NORMAL"
     @Volatile private var redirectAppPackage = ""
+    @Volatile private var blockYoutubeApp = false
 
     override fun onCreate() {
         super.onCreate()
         usageRepository = ShortsUsageRepository(applicationContext)
         debugRepository = ShortsDebugRepository(applicationContext)
         settingsRepository = UserSettingsRepository(applicationContext)
-        overlayManager = OverlayManager(applicationContext)
 
         serviceScope.launch {
             settingsRepository.userSettings.collect { settings ->
                 dailyLimitMinutes = settings.dailyLimitMinutes
                 blockMode = settings.blockMode
                 redirectAppPackage = settings.redirectAppPackage
+                blockYoutubeApp = settings.blockYoutubeApp
             }
         }
         serviceScope.launch {
@@ -62,8 +63,16 @@ class ShortsAccessibilityService : AccessibilityService() {
 
         if (packageName != YoutubeShortsDetector.YOUTUBE_PACKAGE) {
             if (isShortsActive) endShortsSession()
-            overlayManager.hideBlockOverlay()
+            isKilling = false
             consecutiveScrollCount = 0
+            return
+        }
+
+        if (isKilling) return
+
+        // 유튜브 앱 전체 차단 모드
+        if (blockYoutubeApp) {
+            applyBlock()
             return
         }
 
@@ -80,17 +89,19 @@ class ShortsAccessibilityService : AccessibilityService() {
         if (now - lastAnalysisMs < DEBOUNCE_MS) return
         lastAnalysisMs = now
 
-        analyzeCurrentScreen(event.eventType)
+        val className = event.className?.toString()
+        analyzeCurrentScreen(event.eventType, className)
         consecutiveScrollCount = 0
     }
 
-    private fun analyzeCurrentScreen(eventType: Int) {
+    private fun analyzeCurrentScreen(eventType: Int, windowClassName: String? = null) {
         val root = rootInActiveWindow ?: return
         val result = detector.detect(
             packageName = YoutubeShortsDetector.YOUTUBE_PACKAGE,
             rootNode = root,
             eventType = eventType,
-            consecutiveScrollCount = consecutiveScrollCount
+            consecutiveScrollCount = consecutiveScrollCount,
+            windowClassName = windowClassName
         )
 
         when {
@@ -98,54 +109,63 @@ class ShortsAccessibilityService : AccessibilityService() {
             !result.isShorts && isShortsActive -> endShortsSession()
         }
 
-        if (result.isShorts) {
-            checkAndShowBlockOverlay()
-        } else {
-            overlayManager.hideBlockOverlay()
-        }
+        if (result.isShorts) checkLimitAndBlock()
 
         val now = System.currentTimeMillis()
         if (now - lastDebugWriteMs >= DEBUG_WRITE_THROTTLE_MS) {
             lastDebugWriteMs = now
             val sessionStart = if (isShortsActive) shortsSessionStartMs else 0L
-            val debugState = ShortsDebugState(
-                lastDetectedPackageName = YoutubeShortsDetector.YOUTUBE_PACKAGE,
-                lastEventType = eventTypeToString(eventType),
-                isCurrentlyShorts = result.isShorts,
-                lastConfidence = result.confidence,
-                lastDetectionReasons = result.reasons.joinToString(", "),
-                lastDetectionTimeMillis = now,
-                currentSessionStartedAt = sessionStart
-            )
             serviceScope.launch {
-                debugRepository.saveDebugState(debugState)
+                debugRepository.saveDebugState(
+                    ShortsDebugState(
+                        lastDetectedPackageName = YoutubeShortsDetector.YOUTUBE_PACKAGE,
+                        lastEventType = eventTypeToString(eventType),
+                        isCurrentlyShorts = result.isShorts,
+                        lastConfidence = result.confidence,
+                        lastDetectionReasons = result.reasons.joinToString(", "),
+                        lastDetectionTimeMillis = now,
+                        currentSessionStartedAt = sessionStart
+                    )
+                )
             }
         }
     }
 
-    private fun checkAndShowBlockOverlay() {
-        if (dailyLimitMinutes <= 0) return
-        val activeSessionSeconds = if (isShortsActive && shortsSessionStartMs > 0L) {
-            (System.currentTimeMillis() - shortsSessionStartMs) / 1000L
-        } else {
-            0L
+    private fun checkLimitAndBlock() {
+        val isZeroLimit = dailyLimitMinutes == 0
+        if (!isZeroLimit) {
+            val activeSessionSeconds = if (isShortsActive && shortsSessionStartMs > 0L)
+                (System.currentTimeMillis() - shortsSessionStartMs) / 1000L else 0L
+            if (todayShortsSeconds + activeSessionSeconds < dailyLimitMinutes * 60L) return
         }
-        if (todayShortsSeconds + activeSessionSeconds < dailyLimitMinutes * 60L) return
+        applyBlock()
+    }
 
-        // 리다이렉트 앱 설정 시 → 해당 앱 실행 후 차단 모드 생략
+    private fun applyBlock() {
+        if (isKilling) return
+        isKilling = true
+        endShortsSession()
+
         if (redirectAppPackage.isNotEmpty()) {
             launchRedirectApp()
-            return
+        } else {
+            performGlobalAction(GLOBAL_ACTION_HOME)
         }
 
-        when (blockMode) {
-            "STRICT" -> {
-                overlayManager.showBlockOverlay()
-                performGlobalAction(GLOBAL_ACTION_BACK)
-            }
-            "SOFT" -> { /* 알림 기능 준비 중 */ }
-            else -> overlayManager.showBlockOverlay() // NORMAL
+        // 홈/앱 전환 후 YouTube가 백그라운드로 가면 프로세스 종료
+        serviceScope.launch {
+            delay(KILL_DELAY_MS)
+            killYoutube()
+            delay(1_000)
+            isKilling = false
         }
+    }
+
+    private fun killYoutube() {
+        try {
+            val am = getSystemService(ACTIVITY_SERVICE) as ActivityManager
+            am.killBackgroundProcesses(YoutubeShortsDetector.YOUTUBE_PACKAGE)
+        } catch (_: Exception) {}
     }
 
     private fun launchRedirectApp() {
@@ -153,17 +173,13 @@ class ShortsAccessibilityService : AccessibilityService() {
             val intent = packageManager.getLaunchIntentForPackage(redirectAppPackage) ?: return
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             startActivity(intent)
-        } catch (e: Exception) {
-            // 앱이 제거됐거나 실행 불가 — 무시
-        }
+        } catch (_: Exception) {}
     }
 
     private fun startShortsSession() {
         isShortsActive = true
         shortsSessionStartMs = System.currentTimeMillis()
-        serviceScope.launch {
-            usageRepository.incrementOpenCount()
-        }
+        serviceScope.launch { usageRepository.incrementOpenCount() }
     }
 
     private fun endShortsSession() {
@@ -171,13 +187,8 @@ class ShortsAccessibilityService : AccessibilityService() {
         isShortsActive = false
         val durationMs = System.currentTimeMillis() - shortsSessionStartMs
         shortsSessionStartMs = 0L
-
         if (durationMs < MIN_SESSION_MS) return
-
-        val durationSec = durationMs / 1000L
-        serviceScope.launch {
-            usageRepository.addUsageSeconds(durationSec)
-        }
+        serviceScope.launch { usageRepository.addUsageSeconds(durationMs / 1000L) }
     }
 
     private fun eventTypeToString(eventType: Int): String = when (eventType) {
@@ -187,14 +198,10 @@ class ShortsAccessibilityService : AccessibilityService() {
         else -> "TYPE_$eventType"
     }
 
-    override fun onInterrupt() {
-        endShortsSession()
-        overlayManager.hideBlockOverlay()
-    }
+    override fun onInterrupt() { endShortsSession() }
 
     override fun onDestroy() {
         endShortsSession()
-        overlayManager.hideBlockOverlay()
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -203,5 +210,6 @@ class ShortsAccessibilityService : AccessibilityService() {
         private const val DEBOUNCE_MS = 200L
         private const val MIN_SESSION_MS = 1_000L
         private const val DEBUG_WRITE_THROTTLE_MS = 400L
+        private const val KILL_DELAY_MS = 400L
     }
 }

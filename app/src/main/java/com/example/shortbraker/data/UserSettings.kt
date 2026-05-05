@@ -6,5 +6,6 @@ data class UserSettings(
     val bedtimeModeEnabled: Boolean = false,
     val bedtimeStart: String = "23:30",
     val bedtimeEnd: String = "07:00",
-    val redirectAppPackage: String = ""
+    val redirectAppPackage: String = "",
+    val blockYoutubeApp: Boolean = false
 )

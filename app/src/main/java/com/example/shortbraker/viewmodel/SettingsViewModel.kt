@@ -44,4 +44,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun updateRedirectApp(packageName: String) {
         viewModelScope.launch { repository.updateRedirectApp(packageName) }
     }
+
+    fun updateBlockYoutubeApp(enabled: Boolean) {
+        viewModelScope.launch { repository.updateBlockYoutubeApp(enabled) }
+    }
 }

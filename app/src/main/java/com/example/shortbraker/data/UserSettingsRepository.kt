@@ -22,6 +22,7 @@ class UserSettingsRepository(private val context: Context) {
         val KEY_BEDTIME_START = stringPreferencesKey("bedtime_start")
         val KEY_BEDTIME_END = stringPreferencesKey("bedtime_end")
         val KEY_REDIRECT_APP = stringPreferencesKey("redirect_app_package")
+        val KEY_BLOCK_YOUTUBE_APP = booleanPreferencesKey("block_youtube_app")
     }
 
     val userSettings: Flow<UserSettings> = context.dataStore.data.map { prefs ->
@@ -31,7 +32,8 @@ class UserSettingsRepository(private val context: Context) {
             bedtimeModeEnabled = prefs[KEY_BEDTIME_MODE_ENABLED] ?: false,
             bedtimeStart = prefs[KEY_BEDTIME_START] ?: "23:30",
             bedtimeEnd = prefs[KEY_BEDTIME_END] ?: "07:00",
-            redirectAppPackage = prefs[KEY_REDIRECT_APP] ?: ""
+            redirectAppPackage = prefs[KEY_REDIRECT_APP] ?: "",
+            blockYoutubeApp = prefs[KEY_BLOCK_YOUTUBE_APP] ?: false
         )
     }
 
@@ -57,5 +59,9 @@ class UserSettingsRepository(private val context: Context) {
 
     suspend fun updateRedirectApp(packageName: String) {
         context.dataStore.edit { prefs -> prefs[KEY_REDIRECT_APP] = packageName }
+    }
+
+    suspend fun updateBlockYoutubeApp(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[KEY_BLOCK_YOUTUBE_APP] = enabled }
     }
 }
