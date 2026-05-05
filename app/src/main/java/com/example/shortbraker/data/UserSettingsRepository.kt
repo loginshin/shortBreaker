@@ -21,6 +21,7 @@ class UserSettingsRepository(private val context: Context) {
         val KEY_BEDTIME_MODE_ENABLED = booleanPreferencesKey("bedtime_mode_enabled")
         val KEY_BEDTIME_START = stringPreferencesKey("bedtime_start")
         val KEY_BEDTIME_END = stringPreferencesKey("bedtime_end")
+        val KEY_REDIRECT_APP = stringPreferencesKey("redirect_app_package")
     }
 
     val userSettings: Flow<UserSettings> = context.dataStore.data.map { prefs ->
@@ -29,7 +30,8 @@ class UserSettingsRepository(private val context: Context) {
             blockMode = prefs[KEY_BLOCK_MODE] ?: "NORMAL",
             bedtimeModeEnabled = prefs[KEY_BEDTIME_MODE_ENABLED] ?: false,
             bedtimeStart = prefs[KEY_BEDTIME_START] ?: "23:30",
-            bedtimeEnd = prefs[KEY_BEDTIME_END] ?: "07:00"
+            bedtimeEnd = prefs[KEY_BEDTIME_END] ?: "07:00",
+            redirectAppPackage = prefs[KEY_REDIRECT_APP] ?: ""
         )
     }
 
@@ -51,5 +53,9 @@ class UserSettingsRepository(private val context: Context) {
 
     suspend fun updateBedtimeEnd(time: String) {
         context.dataStore.edit { prefs -> prefs[KEY_BEDTIME_END] = time }
+    }
+
+    suspend fun updateRedirectApp(packageName: String) {
+        context.dataStore.edit { prefs -> prefs[KEY_REDIRECT_APP] = packageName }
     }
 }

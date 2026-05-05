@@ -1,6 +1,7 @@
 package com.example.shortbraker.accessibility
 
 import android.accessibilityservice.AccessibilityService
+import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
 import com.example.shortbraker.data.ShortsDebugRepository
 import com.example.shortbraker.data.ShortsDebugState
@@ -31,6 +32,8 @@ class ShortsAccessibilityService : AccessibilityService() {
     // 두 Flow에서 수집한 값을 메인 스레드 비교용으로 캐싱
     @Volatile private var dailyLimitMinutes = 0
     @Volatile private var todayShortsSeconds = 0L
+    @Volatile private var blockMode = "NORMAL"
+    @Volatile private var redirectAppPackage = ""
 
     override fun onCreate() {
         super.onCreate()
@@ -42,6 +45,8 @@ class ShortsAccessibilityService : AccessibilityService() {
         serviceScope.launch {
             settingsRepository.userSettings.collect { settings ->
                 dailyLimitMinutes = settings.dailyLimitMinutes
+                blockMode = settings.blockMode
+                redirectAppPackage = settings.redirectAppPackage
             }
         }
         serviceScope.launch {
@@ -125,8 +130,31 @@ class ShortsAccessibilityService : AccessibilityService() {
         } else {
             0L
         }
-        if (todayShortsSeconds + activeSessionSeconds >= dailyLimitMinutes * 60L) {
-            overlayManager.showBlockOverlay()
+        if (todayShortsSeconds + activeSessionSeconds < dailyLimitMinutes * 60L) return
+
+        // 리다이렉트 앱 설정 시 → 해당 앱 실행 후 차단 모드 생략
+        if (redirectAppPackage.isNotEmpty()) {
+            launchRedirectApp()
+            return
+        }
+
+        when (blockMode) {
+            "STRICT" -> {
+                overlayManager.showBlockOverlay()
+                performGlobalAction(GLOBAL_ACTION_BACK)
+            }
+            "SOFT" -> { /* 알림 기능 준비 중 */ }
+            else -> overlayManager.showBlockOverlay() // NORMAL
+        }
+    }
+
+    private fun launchRedirectApp() {
+        try {
+            val intent = packageManager.getLaunchIntentForPackage(redirectAppPackage) ?: return
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+        } catch (e: Exception) {
+            // 앱이 제거됐거나 실행 불가 — 무시
         }
     }
 

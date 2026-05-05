@@ -5,7 +5,9 @@
       "PowerShell(cd C:\\\\workspace\\\\GitHub\\\\ShortBreaker; .\\\\gradlew.bat :app:assembleDebug --no-daemon 2>&1 | Where-Object { $_ -match \"BUILD|error:|warning:|compileDebug|FAILED\" })",
       "PowerShell(cd C:\\\\workspace\\\\GitHub\\\\ShortBreaker; .\\\\gradlew.bat :app:assembleDebug --no-daemon 2>&1 | Where-Object { $_ -match \"BUILD|error:|warning:|compileDebug|FAILED|Exception\" })",
       "Bash(.\\\\gradlew.bat :app:assembleDebug *)",
-      "PowerShell(.\\\\gradlew.bat :app:assembleDebug 2>&1)"
+      "PowerShell(.\\\\gradlew.bat :app:assembleDebug 2>&1)",
+      "PowerShell(cmd /c \"where java\" ; $env:JAVA_HOME ; cmd /c \"java -version 2>&1\")",
+      "PowerShell(cmd /c \"\"\"C:\\\\java\\\\jdk17\\\\bin\\\\java.exe\"\" -version 2>&1\")"
     ]
   }
 }

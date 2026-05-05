@@ -5,5 +5,6 @@ data class UserSettings(
     val blockMode: String = "NORMAL",
     val bedtimeModeEnabled: Boolean = false,
     val bedtimeStart: String = "23:30",
-    val bedtimeEnd: String = "07:00"
+    val bedtimeEnd: String = "07:00",
+    val redirectAppPackage: String = ""
 )

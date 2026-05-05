@@ -40,4 +40,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun updateBedtimeEnd(time: String) {
         viewModelScope.launch { repository.updateBedtimeEnd(time) }
     }
+
+    fun updateRedirectApp(packageName: String) {
+        viewModelScope.launch { repository.updateRedirectApp(packageName) }
+    }
 }
