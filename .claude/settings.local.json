@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "PowerShell(cd C:\\\\workspace\\\\GitHub\\\\ShortBreaker; .\\\\gradlew.bat :app:assembleDebug --no-daemon 2>&1 | Where-Object { $_ -match \"BUILD|warning|error|FAILED|Task :app:compile\" })",
-      "PowerShell(cd C:\\\\workspace\\\\GitHub\\\\ShortBreaker; .\\\\gradlew.bat :app:assembleDebug --no-daemon 2>&1 | Where-Object { $_ -match \"BUILD|error:|warning:|compileDebug|FAILED\" })"
+      "PowerShell(cd C:\\\\workspace\\\\GitHub\\\\ShortBreaker; .\\\\gradlew.bat :app:assembleDebug --no-daemon 2>&1 | Where-Object { $_ -match \"BUILD|error:|warning:|compileDebug|FAILED\" })",
+      "PowerShell(cd C:\\\\workspace\\\\GitHub\\\\ShortBreaker; .\\\\gradlew.bat :app:assembleDebug --no-daemon 2>&1 | Where-Object { $_ -match \"BUILD|error:|warning:|compileDebug|FAILED|Exception\" })",
+      "Bash(.\\\\gradlew.bat :app:assembleDebug *)",
+      "PowerShell(.\\\\gradlew.bat :app:assembleDebug 2>&1)"
     ]
   }
 }

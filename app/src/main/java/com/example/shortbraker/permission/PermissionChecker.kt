@@ -24,6 +24,9 @@ class PermissionChecker(private val context: Context) {
     fun hasAccessibilityPermission(): Boolean {
         val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
         return am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-            .any { it.resolveInfo.serviceInfo.packageName == context.packageName }
+            .any { info ->
+                info.resolveInfo.serviceInfo.packageName == context.packageName &&
+                info.resolveInfo.serviceInfo.name.contains("ShortsAccessibilityService")
+            }
     }
 }
